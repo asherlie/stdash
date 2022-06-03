@@ -22,7 +22,8 @@ int main(){
 	 * puts("ready");
 	 * p_thread_ll(p.ready);
 	*/
-	for(int i = 0; i < 50; ++i){
+    shrink_pool(&p, 4);
+    for(int i = 0; i < 50; ++i){
 		n = malloc(sizeof(int));
 		*n = i;
 		exec_routine(&p, test_routine, n);

@@ -43,8 +43,10 @@ struct pool{
 	struct routine_queue* routines;
 	struct thread_ll* running, * ready;
 
-	_Atomic int waiting_threads;
+	_Atomic int size_shift;
+	_Atomic int total_threads;
 };
 
 void init_pool(struct pool* p, int n);
 void exec_routine(struct pool* p, void *(*routine)(void*), void* arg);
+void shrink_pool(struct pool* p, int by);
