@@ -110,7 +110,7 @@ void swap_thread_entry(){
 
 _Bool time_to_exit(struct pool* p){
     int shift = atomic_load(&p->size_shift);
-    if(shift > 0)return 0;
+    if(shift >= 0)return 0;
     /* this is not guaranteed to exit when it should,
      * if two threads ought to exit at the same time, 
      * there's a chance that only one will exit
@@ -127,7 +127,7 @@ void* wait_and_exec(void* vt){
 	struct routine* r;
 	for(;;){	
 		r = pop_rq(t->pool_backref->routines);
-		r->routine(r->arg);
+		if(r->routine)r->routine(r->arg);
         if(time_to_exit(t->pool_backref))break;
 		/*pthread_cond_*/
 	}
@@ -187,11 +187,18 @@ void p_thread(struct thread* t, int spaces){
 }
 
 void shrink_pool(struct pool* p, int by){
+    int nop = by-atomic_load(&p->routines->n);
     atomic_fetch_add(&p->size_shift, -by);
-    /*
-     * we must exec by-p->routines->n NOPs to ensure
-     * that we shrink properly
-    */
+    /* queue enough NOPs to ensure that
+     * all threads that need to exit will exit
+     *
+     * all running threads will exit after their
+     * routines along with however many NOPs
+     * were running to make up the difference
+     */
+    for(int i = 0; i < nop; ++i){
+        exec_routine(p, NULL, NULL);
+    }
 }
 
 int set_thread_number(struct pool* p, int n){
