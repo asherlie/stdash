@@ -30,10 +30,14 @@ struct thread{
 
 struct thread_entry{
 	struct thread* thread;
-	struct thread_entry* next;
+	struct thread_entry* next, * prev;
 };
 
 struct thread_ll{
+    /*
+     * only used in insert_thread(), remove_thread(), print
+     * this is relevant for expand_pool
+    */
 	pthread_mutex_t lock;
 	int sz;
 	struct thread_entry* first, * last;
@@ -50,3 +54,5 @@ struct pool{
 void init_pool(struct pool* p, int n);
 void exec_routine(struct pool* p, void *(*routine)(void*), void* arg);
 void shrink_pool(struct pool* p, int by);
+void expand_pool(struct pool* p, int by);
+void p_thread_ll(struct thread_ll* threads);
