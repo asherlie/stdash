@@ -92,10 +92,12 @@ struct thread* insert_thread_ll(struct thread_ll* threads, struct thread* t){
 
 	pthread_mutex_lock(&threads->lock);
 	if(!threads->first){
+        e->prev = NULL;
 		threads->first = threads->last = e;
 	}
 	else{
-		threads->last->next = e;
+        e->prev = threads->last;
+		e->prev->next = e;
 		threads->last = e;
 	}
 	++threads->sz;
@@ -115,9 +117,74 @@ _Bool time_to_exit(struct pool* p){
      * if two threads ought to exit at the same time, 
      * there's a chance that only one will exit
      */
-    if(atomic_compare_exchange_strong(&p->size_shift, &shift, shift+1))
+    /* TODO: ABA problem? shrink, add, shrink */
+    if(atomic_compare_exchange_strong(&p->size_shift, &shift, shift+1)){
+        printf("decremented %i shrinks to %i\n", shift, shift+1);
         return 1;
+    }
     return 0;
+}
+
+/* it's okay for this to not be efficient because 
+ * it doesn't conflict with any other code - this is only
+ * performed after wait_and_exec() is ready to shutdown
+ * this can slow down the expanding of the pool
+ *
+ * TODO: just pass this the thread_entry that contains
+ * prev, next
+ */
+void remove_thread_ll(struct pool* p, struct thread* t){
+    struct thread_entry* e;
+    pthread_mutex_lock(&p->ready->lock);
+    for(e = p->ready->first; e; e = e->next){
+        if(e->thread == t)break;
+    }
+    /*
+     * rm:
+     *     internal
+     *         prev->next = next
+     *         next->prev = prev
+     *     first
+     *         if(next)next->prev = NULL
+     *         first = next
+     *     last    
+     *         if(prev)prev->next = NULL
+     *         last = prev
+    */
+    /*if(!e)return;*/
+    /* e is not the first element */
+    /*what if e is last*/
+    if(e->prev && e->next){
+        e->prev->next = e->next;
+        e->next->prev = e->prev;
+    }
+    else{
+        // last
+        if(e->prev){
+            e->prev->next = NULL;
+            p->ready->last = e->prev;
+        }
+        // first
+        else{
+            e->next->prev = NULL;
+            p->ready->first = e->next;
+        }
+    }
+    #if 0
+    if(e->prev){
+        e->prev->next = e->next;
+        if(e->next)e->next->prev = e->prev;
+        else p->ready->last = e;
+    }
+    else{
+        p->ready->first = e->next;
+        if(!p->ready->first)p->ready->last = NULL;
+        /*if(p->ready->last == p->ready->first)*/
+    }
+    #endif
+    atomic_fetch_add(&p->total_threads, -1);
+    pthread_mutex_unlock(&p->ready->lock);
+    /*free(t);*/
 }
 
 // threads should be moved from ready -> running
@@ -132,7 +199,8 @@ void* wait_and_exec(void* vt){
 		/*pthread_cond_*/
 	}
     printf("thread %i has exited!\n", t->id);
-    atomic_fetch_add(&t->pool_backref->total_threads, -1);
+    remove_thread_ll(t->pool_backref, t);
+    /*atomic_fetch_add(&t->pool_backref->total_threads, -1);*/
 
     return NULL;
 }
@@ -199,6 +267,24 @@ void shrink_pool(struct pool* p, int by){
     for(int i = 0; i < nop; ++i){
         exec_routine(p, NULL, NULL);
     }
+}
+
+/*
+ * just need to increment size_shift, nay! no need
+ * we can just insert spawned threads into the ready ll
+ * and increment nthreads in pool
+ * size_shift can still apply
+ * in this case, we can make it positive bc it'll
+ * never be neg
+*/
+void expand_pool(struct pool* p, int by){
+    for(int i = 0; i < by; ++i)
+        insert_thread_ll(p->ready, spawn_thread(-1, NULL, p));
+
+    /* not a problem if this runs between thread exits,
+     * the thread count will remain accurate
+     */
+    atomic_fetch_add(&p->total_threads, by);
 }
 
 int set_thread_number(struct pool* p, int n){
