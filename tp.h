@@ -48,6 +48,7 @@ struct pool{
 	struct thread_ll* running, * ready;
 
 	_Atomic int size_shift;
+	_Atomic int assign_id;
 	_Atomic int total_threads;
 };
 

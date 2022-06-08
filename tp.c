@@ -205,10 +205,10 @@ void* wait_and_exec(void* vt){
     return NULL;
 }
 
-struct thread* spawn_thread(int id, char* name, struct pool* p){
+struct thread* spawn_thread(char* name, struct pool* p){
 	struct thread* ret = malloc(sizeof(struct thread));
 	ret->pool_backref = p;
-	ret->id = id;
+	ret->id = atomic_fetch_add(&p->assign_id, 1);
 	ret->name = name;
 	pthread_create(&ret->pth, NULL, wait_and_exec, ret);
 	return ret;
@@ -220,6 +220,7 @@ void init_pool(struct pool* p, int n){
 	p->routines = malloc(sizeof(struct routine_queue));
 
     p->total_threads = n;
+    p->assign_id = 0;
     p->size_shift = 0;
 
 	/* this sets up a lock and cond that wait_and_exec() use */
@@ -229,7 +230,7 @@ void init_pool(struct pool* p, int n){
 	init_thread_ll(p->ready);
 
 	for(int i = 0; i < n; ++i){
-		insert_thread_ll(p->ready, spawn_thread(i, NULL, p));
+		insert_thread_ll(p->ready, spawn_thread(NULL, p));
 	}
 }
 
@@ -279,7 +280,7 @@ void shrink_pool(struct pool* p, int by){
 */
 void expand_pool(struct pool* p, int by){
     for(int i = 0; i < by; ++i)
-        insert_thread_ll(p->ready, spawn_thread(-1, NULL, p));
+        insert_thread_ll(p->ready, spawn_thread(NULL, p));
 
     /* not a problem if this runs between thread exits,
      * the thread count will remain accurate
