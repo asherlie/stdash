@@ -32,6 +32,7 @@ int main(){
     shrink_pool(&p, 10);
 	usleep(5000000);
     printf("finished with %i threads\n", p.total_threads);
+    expand_pool(&p, 40);
     p_thread_ll(p.ready);
 	return 0;
 }
