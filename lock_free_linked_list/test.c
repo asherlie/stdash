@@ -1,6 +1,7 @@
 #include "lf_ll.h"
 
 #include <stdio.h>
+#include <unistd.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -16,6 +17,7 @@ struct ins_arg{
     int n_threads;
     int ins_per_thread;
     int thread_id;
+    int sleep_us_bound;
 
     struct ll* l;
 };
@@ -24,6 +26,11 @@ struct ins_arg{
 void* insertion_thread(void* varg) {
     struct ins_arg* arg = varg;
     for (int i = 0; i < arg->ins_per_thread; ++i) {
+        if (arg->sleep_us_bound) {
+            /*usleep(sleep_us_bound);*/
+            usleep(random() % arg->sleep_us_bound);
+
+        }
         insert_ll(arg->l, (void*)(uint64_t)arg->thread_id);
     }
 
@@ -31,7 +38,7 @@ void* insertion_thread(void* varg) {
     return NULL;
 }
 
-_Bool concurrent_test(int n_threads, int ins_per_thread, _Bool debug) {
+_Bool concurrent_test(int n_threads, int ins_per_thread, int max_sleep, _Bool debug) {
     struct ll l = {0};
     pthread_t th[n_threads];
     struct ins_arg* arg;
@@ -40,6 +47,7 @@ _Bool concurrent_test(int n_threads, int ins_per_thread, _Bool debug) {
     for (int i = 0; i < n_threads; ++i) {
         expected_data[i] = ins_per_thread;
         arg = malloc(sizeof(struct ins_arg));
+        arg->sleep_us_bound = max_sleep;
         arg->l = &l;
         arg->thread_id = i;
         arg->n_threads = n_threads;
@@ -76,7 +84,6 @@ _Bool concurrent_test(int n_threads, int ins_per_thread, _Bool debug) {
 }
 
 int main(){
-
     struct ll l;
     insert_ll(&l, (void*)1);
     insert_ll(&l, (void*)1);
@@ -86,8 +93,12 @@ int main(){
 
     p_ll(&l);
 
-    if (concurrent_test(50, 50001, 0)) {
-        puts("SUCCESS! linked list is exactly as expected");
+    if (concurrent_test(50, 500001, 0, 0)) {
+        puts("Many insertion SUCCESS! linked list is exactly as expected");
+    }
+
+    if (concurrent_test(50, 500, 1000, 0)) {
+        puts("Random sleep SUCCESS! linked list is exactly as expected");
     }
 
     return 1;
