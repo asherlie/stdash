@@ -1,3 +1,5 @@
+#include "lf_ll.h"
+
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
@@ -15,16 +17,6 @@
  *
  *     OR, since when first == NULL, last will never be updated, we can just take our time
 */
-struct node{
-    struct node* next;
-    void* data;
-};
-
-struct ll{
-    _Atomic (struct node*) first;
-    _Atomic (struct node*) last;
-};
-
 void insert_ll(struct ll* l, void* data) {
     struct node* n = malloc(sizeof(struct node));
     _Atomic (struct node*) nil_n = NULL;
@@ -56,22 +48,4 @@ void p_ll(struct ll* l) {
         printf("%li -> ", (uint64_t)n->data);
     }
     puts("\\0");
-}
-
-int main(){
-
-    struct ll l;
-    insert_ll(&l, (void*)1);
-    insert_ll(&l, (void*)1);
-    for (uint64_t i = 0; i < 13; ++i) {
-        insert_ll(&l, (void*)i);
-    }
-
-    p_ll(&l);
-
-    if (concurrent_test(50, 50001, 0)) {
-        puts("SUCCESS! linked list is exactly as expected");
-    }
-
-    return 1;
 }
